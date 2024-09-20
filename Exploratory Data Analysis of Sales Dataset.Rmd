@@ -1,0 +1,612 @@
+---
+title: "Programming Of Data Science"
+output:
+  word_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# DECLARATION
+
+we the authors of this work, verify that:
+
+-   We hold a copy of this assignment that we can produce if the original is lost or damaged.
+
+    Weherebycertifythatnopartofthisassignment/producthasbeencopiedfromanyotherstudent\'s
+    work or from any other source except where due acknowledgement is made in the assignment.				
+
+-   No part of this assignment/product has been written/produced for us by another person except
+    where such collaboration has been authorised by the subject lecturer/tutor concerned.	
+
+-   						
+
+    Weareawarethatthisworkmaybereproducedandsubmittedtoplagiarismdetectionsoftwarepro-
+    grams for the purpose of detecting possible plagiarism (which may retain a copy on its database
+    for future plagiarism checking).
+
+-   We hereby certify that we have read and understand what the School of Computing, Engineering
+    and Mathematics defines as minor and substantial breaches of misconduct as outlined in the learning
+    guide for this unit.
+
+**Installing all required libraries**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+```
+
+# Question 1
+
+## For one of the data sets, write the code to compute the total revenue of each store at the end of each day.
+
+## Is there a noted difference between the days?
+
+## Write also the code to calculate the total revenue over the seven day period. Plot the latter on a graph. 
+
+## Compare the revenue between the two data sets, is there a difference?
+
+To do this question, let's create data frames for both the sales data sets.
+
+```{r}
+# using read.csv() function, we are locating the target file and saving it into variables 'sales1' and 'sales2' as Data Frames.
+
+sales1 <- read.csv("Datasets/sales_pg_1.csv")
+sales2 <- read.csv("Datasets/sales_pg_2.csv")
+
+# Print out first 6 rows of both data frames.
+
+head(sales1)
+head(sales2)
+```
+
+### A) write the code to compute the total revenue of each store at the end of each day.
+
+To do this, we can use the dplyr library.
+
+```{r}
+# from sales1 df, we are selecting columns, date, store_id, revenue, then grouping the column, first by date and then by store_id
+
+EODTotalSales <- sales1 %>% select(date, store_id, revenue) %>%  group_by(date, store_id) %>% summarise("revenueSum" = sum(revenue))
+
+```
+
+```{r}
+EODTotalSales
+```
+
+### B) Is there a noted difference between the days?
+
+In the data set, let's find whether there is any noted difference between the days.
+
+```{r}
+
+revPerDay <- (sales1 %>% select(date, revenue) %>% group_by(date) %>% summarise("revenue" = sum(revenue)))
+
+ggplot(data = revPerDay, aes(x = date, y = revenue)) +
+  geom_bar(position = "dodge", stat = "identity")
+```
+
+We can see on 28 Jan and 3 Feb, the revenue is more than 30,000 and for all other dates, they have almost similar revenue which is around 22500.
+
+Let's check whether the difference is statistically significant.
+
+```{r}
+table(sales1$date)
+```
+
+As the sample size is large, we can assume its normally distributed.
+
+let's do a one way test to see the statistical difference. For that we can **assume a significance level of 0.05**.
+
+Let
+
+-   H0: There is no statistically significant difference between revenue of at least 2 different dates
+
+-   HA: There is statistically significant difference between revenue of at least 2 different dates
+
+```{r}
+oneway.test(revenue ~ date,
+            data = sales1)
+```
+
+From the one way analysis, we have a **p-value of 2.2e-16** which is much **lesser than assumed significance level**. With this, we reject our null hypothesis and say that there **is statistically significant difference between revenue from at least two different dates.**
+
+\-\-\--
+
+### C) Write also the code to calculate the total revenue over the seven day period. Plot it on a graph.
+
+```{r}
+# for both datasets, using dplyr, select date and revenue, group the data by date and find the sum of revenue. inorder to plot the date on graph, i mutated the date column to change the data type of date column from character to date.
+
+(totalRevenue1 <- sales1 %>% select(date, revenue) %>%  group_by(date) %>% summarise(Week1Revenue = sum(revenue)) %>% mutate(date, "date" = as.Date(date, format = "%Y-%m-%d")))
+(totalRevenue2 <- sales2 %>% select(date, revenue) %>%  group_by(date) %>% summarise(Week2Revenue = sum(revenue)) %>% mutate(date, "date" = as.Date(date, format = "%Y-%m-%d")))
+```
+
+From the table, we have information for total revenue for each day across all stores. But we can plot the data on a line plot so that its easier to interpret it. The below line plot shows trend for the first data set.
+
+```{r}
+# using ggplot library, I took the dataset totalRevenue1, plotted date on x axis and Week1Revenue on y axis.
+
+ggplot(data = totalRevenue1, mapping = aes(x = date, y = Week1Revenue)) +
+  geom_line(col = 'red') +
+  ylim(0,35000) +
+  theme_linedraw()
+```
+
+\-\-\--
+
+### D) Compare the revenue between the two data sets, is there a difference?
+
+To compare the revenue from two data sets, we have to take sum of revenue of all dates.
+
+```{r}
+# took total revenue from both datasets.
+
+week1Sum <- sum(totalRevenue1$Week1Revenue)
+week2Sum <- sum(totalRevenue2$Week2Revenue)
+
+# using data.frame() function, I created two columns called Week and Sum.
+
+weekSum <- data.frame(Week = c("Week 1", "Week 2"),
+                      Sum = c(week1Sum, week2Sum))
+```
+
+Now that we have the required data frame, let's plot it on a bar graph.
+
+```{r}
+ggplot(data = weekSum, aes(x = Week, y = Sum, fill = Week)) +
+  geom_bar(stat='identity', position='dodge', col = 'black')
+```
+
+# Question 2
+
+## What's the most popular product type (hierarchy 1) sold in all stores over a week?
+
+## How much revenue did the stores receive for that product during the week?
+
+## How does that compare with the second most popular product? Provide a table that shows the product type ranked from most to least popular.
+
+## For each product type provide: how many subtypes (hierarchy 2) are there, how many products are in this product type, what's the sales quantity, and the revenue generated.
+
+## Does this result vary between the two data sets?
+
+To answer this question, we need the product_hierarchy data set. So we import it.
+
+```{r}
+# import dataset using read.csv() function
+
+heirarchy1 <- read.csv("Datasets/product_hierarchy.csv")
+head(heirarchy1)
+```
+
+### A) What's the most popular product type (hierarchy 1) sold in all stores over a week?
+
+First, we will take required columns from sales1 data set.
+
+```{r}
+hierarchySales <- sales1 %>% select(product_id, sales, revenue)
+```
+
+As we need hierarchy of products sold, we need to join the above data set with hierarchy data set.
+
+```{r}
+# using inner_join(), join the hierarchySales and heirarchy1 data set with product_id column as common.
+
+head(productwithHierarchy <- hierarchySales %>% inner_join(heirarchy1, by = "product_id"))
+```
+
+Using the 'productwithHierarchy' data set, group the hierarchy and we can find the total sales for each hierarchy, which represents the popularity of each hierarchy
+
+```{r}
+# using group_by() function, group according to hierarchy and find total sales for each hierarchy
+
+(q2a <- productwithHierarchy %>% select(hierarchy1_id, sales) %>% group_by(hierarchy1_id) %>% summarise(totalSales = sum(sales)))
+```
+
+```{r}
+ggplot(data = q2a, aes(x = hierarchy1_id, y = totalSales, fill = hierarchy1_id)) +
+  geom_bar(position = 'dodge', stat = 'identity') +
+  theme_classic()
+```
+
+From the result, we can see H00 is the most popular product type, followed by H01.
+
+Sales define how popular the product is. Therefore, to find the most popular product,
+
+```{r}
+productSales <- sales1 %>% select(product_id, sales) %>% group_by(product_id) %>% summarise("sumSales" = sum(sales)) %>% arrange(desc(sumSales))
+head(productSales)
+```
+
+```{r}
+ggplot(data = head(productSales), aes(x = product_id, y = sumSales, fill = product_id)) +
+  geom_bar(position = 'dodge', stat = 'identity')
+```
+
+**P0438 is the most popular product, followed by P0438.**
+
+\-\-\--
+
+### B) How much revenue did the stores receive for that product during the week?
+
+We can calculate the revenue stores received from H00 type product.
+
+```{r}
+# using filter, select H00 and find sum the revenue
+
+productwithHierarchy %>% filter(hierarchy1_id == "H00") %>% group_by(hierarchy1_id) %>% summarise(sum(revenue))
+```
+
+We can see the **revenue of product type H00 is 95053.8**
+
+Now, to find the revenue of the popular product,
+
+```{r}
+(product1Revn <- sales1 %>% filter(product_id == "P0438") %>% select(store_id, revenue) %>% summarise(sum(revenue)))
+```
+
+The **product revenue is 2428.19**
+
+\-\-\--
+
+### C) How does that compare with the second most popular product?
+
+The second most popular product from product Sales data set is P0103.
+
+```{r}
+# using filter, select H00 and find sum the revenue
+
+productwithHierarchy %>% filter(hierarchy1_id == "H01") %>% group_by(hierarchy1_id) %>% summarise("revenue" = sum(revenue))
+```
+
+We can see the **revenue of product type H01 is 58558.12**
+
+Now, to find the revenue of the popular product,
+
+```{r}
+(product2Revn <- sales1 %>% filter(product_id == "P0103") %>% select(store_id, revenue) %>% summarise("revenue" = sum(revenue)))
+```
+
+The **product revenue is 12250.26**
+
+Now let's plot the most popular two products
+
+```{r}
+
+prodDf <- data.frame(product = c("Product 1", "Product 2"),
+                     revenue = c(product1Revn$`sum(revenue)`, product2Revn$revenue))
+```
+
+```{r}
+ggplot(data = prodDf, aes(x = "", y = revenue, fill = product)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0)
+```
+
+\-\-\--
+
+### D) Provide a table that shows the product type ranked from most to least popular
+
+```{r}
+rank <- sales1 %>% select(product_id, sales) %>% inner_join(heirarchy1, by = "product_id")
+```
+
+```{r}
+rank %>% group_by(hierarchy1_id) %>% summarise("totalSales" = sum(sales)) %>% arrange(desc(totalSales))
+```
+
+\-\-\--
+
+### E) For each product type provide: how many subtypes (hierarchy 2) are there, how many products are in this product type, what's the sales quantity, and the revenue generated.
+
+**how many subtypes (hierarchy 2) are there ?**
+
+To find the number of sub types of each hierarchy, we have to count after grouping each hierarchy.
+
+```{r}
+# from hierarchy1, group it by hierarchy1_id, count the hierarchy2_id and then count the hierarchy1_id
+
+(subtypeCount <- heirarchy1 %>% group_by(hierarchy1_id) %>% count(hierarchy2_id) %>% count(hierarchy1_id))
+```
+
+The above response shows number of sub types in each hierarchy.
+
+**how many products are in this product type ?**
+
+using hierarchy1 data set, we can count how many times hierarchy1_id is mentioned as for every product, the former is mentioned in the same row.
+
+```{r}
+# group hierarchy1_id and then count it.
+
+heirarchy1 %>% group_by(hierarchy1_id) %>% count(hierarchy1_id)
+```
+
+The above response shows the number of products in each hierarchy.
+
+**what's the sales quantity and revenue generated ?**
+
+Let's find the sales for each hierarchy. For that we have to join the sales data set for both weeks and the hierarchy data set.
+
+```{r}
+# unse the innerjoin function to join sales and hierarchy dataset.
+
+byTypeSales1 <- sales1 %>% select(product_id, sales, revenue) %>% inner_join(heirarchy1, by = "product_id")
+
+byTypeSales2 <- sales2 %>% select(product_id, sales, revenue) %>% inner_join(heirarchy1, by = "product_id")
+```
+
+Let's find for first data set.
+
+-   **Week 1**
+
+```{r}
+# using the above created table, group it by hierarchy1_id and sum the sales value.
+
+(sales1PerType <- byTypeSales1 %>% select(hierarchy1_id, sales, revenue) %>% group_by(hierarchy1_id) %>% summarise(sum(sales)))
+```
+
+Do the same for second data set.
+
+-   **Week 2**
+
+```{r}
+# using the above created table, group it by hierarchy1_id and sum the sales value.
+
+(sales2PerType <- byTypeSales2 %>% select(hierarchy1_id, sales, revenue) %>% group_by(hierarchy1_id) %>% summarise(sum(sales)))
+```
+
+Let's now find the Revenue generated by each hierarchy1_id.
+
+```{r}
+# use the innerjoin function to join sales and hierarchy dataset.
+
+(revenue1PerType <- byTypeSales1 %>% select(hierarchy1_id, sales, revenue) %>% group_by(hierarchy1_id) %>% summarise(sum(revenue)))
+```
+
+```{r}
+# using the above created table, group it by hierarchy1_id and sum the revenue value.
+
+(revenue2PerType <- byTypeSales2 %>% select(hierarchy1_id, sales, revenue) %>% group_by(hierarchy1_id) %>% summarise(sum(revenue)))
+```
+
+provide visualization below.
+
+```{r}
+srdf <- data.frame("Hierarchy" = sales1PerType$hierarchy1_id,
+                   "SalesWeek_1" = sales1PerType$`sum(sales)`,
+                   "SalesWeek_2" = sales2PerType$`sum(sales)`)
+```
+
+using the above create data frame, let's create a side by side bar plot to visualize the information.
+
+```{r}
+# gather() to reshape the data into a longer format. It specifies that we want to gather the sales1 and sales2 columns into a new column called sales_type and their corresponding values into a new column called sales. The -product part indicates that we want to exclude the product column from being gathered.
+
+ggplot(gather(srdf, sales_type, sales, -Hierarchy),
+       aes(x = Hierarchy, y = sales, fill = sales_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_dark()
+```
+
+From the above graph, we can easily visualise the sales info between two data sets.
+
+Let's do the same with the revenue information.
+
+```{r}
+rdf <- data.frame("Hierarchy" = revenue1PerType$hierarchy1_id,
+                   "RevWeek_1" = revenue1PerType$`sum(revenue)`,
+                   "RevWeek_2" = revenue2PerType$`sum(revenue)`)
+```
+
+```{r}
+# gather() to reshape the data into a longer format. It specifies that we want to gather the sales1 and sales2 columns into a new column called sales_type and their corresponding values into a new column called sales. The -product part indicates that we want to exclude the product column from being gathered.
+
+ggplot(gather(rdf, revenue_type, revenue, -Hierarchy),
+       aes(x = Hierarchy, y = revenue, fill = revenue_type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_dark()
+```
+
+The above graph gives us comparison between two data sets.
+
+# Question 3
+
+## Compare the sales volumes between the two most common store types in the data set.
+
+## How do they compare in terms of total revenue? Is there a relationship between a store's size and its revenue?
+
+## Looking at the revenues between all the store types, what other factors could affect the sales numbers and revenue?
+
+## Write the code to verify your hypothesis.
+
+```{r}
+storeData <- read.csv("Datasets/store_cities.csv")
+head(storeData)
+```
+
+### A) Compare the sales volumes between the two most common store types in the data set.
+
+To find that, we have to merge store data with the sales data set.
+
+```{r}
+# create a table by selecting store_id from sales.
+
+storeCount <- sales1 %>% select(store_id)
+```
+
+```{r}
+# using the above table, inner join it with store Data, find the common store type.
+
+(storeTypeCount <- storeCount %>% inner_join(storeData, by = "store_id") %>% count(storetype_id) %>% arrange(desc(n)))
+```
+
+From the above table, we can see ST04 and ST03 are two most common store types.
+
+**Compare sales volumes**
+
+Let's compare the sales volumes between these two store types.
+
+```{r}
+# join storeData with sales data.
+
+storeTypeSalesRevenue <- sales1 %>% select(store_id, sales, revenue) %>% inner_join(storeData, by = "store_id")
+```
+
+```{r}
+# using filter, filter out sales volume of store which are common
+
+compareSalesVol <- storeTypeSalesRevenue %>% filter(storetype_id == "ST03" | storetype_id == "ST04") %>% group_by(storetype_id) %>% summarise("salesSum" = sum(sales))
+```
+
+```{r}
+# using the above table, create a pie chart to represent the proportion of sale between the those store types.
+
+ggplot(data = compareSalesVol, aes(x = " ", y = salesSum, fill = storetype_id)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(start = 0, "y")
+```
+
+\-\-\--
+
+### B) How do they compare in terms of total revenue?
+
+Let's find the revenue total just like we have did above.
+
+```{r}
+strRev <- storeTypeSalesRevenue %>% filter(storetype_id == "ST03" | storetype_id == "ST04") %>% group_by(storetype_id) %>% summarise("revenue" = sum(revenue))
+```
+
+```{r}
+# using the above table, create a pie chart to represent the proportion of revenue between the those store types.
+
+ggplot(data = strRev, aes(x = " ", y = revenue, fill = storetype_id)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(start = 0, "y")
+```
+
+The revenue from ST04 is much higher compared to ST03. This can we because the sales of ST04 is also significantly higher than the other.
+
+\-\-\--
+
+### C) Is there a relationship between a store's size and its revenue?
+
+To find the the relationship between store size and revenue, let's find the the correlation value between them.
+
+```{r}
+# find the correlation which gives us the strength of relationship between the comparing variables.
+
+cor(x = storeTypeSalesRevenue$store_size, y = storeTypeSalesRevenue$revenue)
+```
+
+Also, let's check visually whether there is any trend using a scatter plot.
+
+```{r}
+# create a scatterplot to visually understand whether there is any trend among the 
+
+plot(x = storeTypeSalesRevenue$store_size, y = storeTypeSalesRevenue$revenue,
+     pch = 19,
+     xlab = "Store Size",
+     ylab = "Revenue",
+     col = 2:3)
+```
+
+**From the correlation value, and the scatter plot, it is clear that there is no any kind of relation between the** **store size and revenue.**
+
+\-\-\--
+
+### D) Looking at the revenues between all the store types, what other factors could affect the sales numbers and revenue? Write the code to verify your hypothesis.
+
+1.  **number of products and type of product affects the revenue of these stores.**
+
+For that, we have to join sales, hierarchy and store Data.
+
+```{r}
+subSales <- sales1 %>% select(product_id, store_id, sales, revenue)
+subHierarchy <- heirarchy1 %>% select(product_id, hierarchy1_id, hierarchy2_id)
+```
+
+```{r}
+subSalesHierarchy <- subSales %>% inner_join(subHierarchy, by = "product_id")
+```
+
+```{r}
+joinedAll <- subSalesHierarchy %>% inner_join(storeData, by = "store_id")
+head(joinedAll)
+```
+
+Looking at the revenue,
+
+```{r}
+typeRev <- joinedAll %>% select(storetype_id, revenue, sales) %>% group_by(storetype_id) %>% summarise("revenue" = sum(revenue))
+```
+
+```{r}
+ggplot(data = typeRev, aes(x = storetype_id, y = revenue, fill = storetype_id)) +
+  geom_bar(stat = "identity", position = "dodge")
+```
+
+Looking at the sales volume,
+
+```{r}
+typeSales <- joinedAll %>% select(storetype_id, sales) %>% group_by(storetype_id) %>% summarise("sales" = sum(sales))
+```
+
+```{r}
+ggplot(data = typeSales, aes(x = storetype_id, y = sales, fill = storetype_id)) +
+  geom_bar(stat = "identity", position = "dodge")
+```
+
+**The store type also affects the sales and revenue as shown in the above two graphs.**
+
+# Question 4
+
+## Several different types of promotions were applied to the products during the period with various level of promotion rates. 
+
+## Pick one of the data sets, for each promotion type, display the different levels of promotion used during the period. 
+
+## Analyse the effectiveness of the promotion on the sales of the products. 
+
+## Compare the results between the two time periods.
+
+### A) Pick one of the data sets, for each promotion type, display the different levels of promotion used during the period. 
+
+```{r}
+head(sales1 %>% select(promo_type_1, promo_bin_1) %>% distinct(promo_type_1, promo_bin_1), 10)
+```
+
+Above table shows the promo type and its related promo bin.
+
+\-\-\--
+
+### B) Analyse the effectiveness of the promotion on the sales of the products. 
+
+```{r}
+(salesPerPromo <- sales1 %>% select(promo_type_1, sales) %>% group_by(promo_type_1) %>% summarise("sales" = sum(sales)))
+```
+
+Let's plot a graph to understand the result effectively,
+
+```{r}
+ggplot(data = salesPerPromo, aes(x = promo_type_1, y = sales)) +
+  geom_bar(stat = "identity", position = "dodge")
+```
+
+The promo type PR14 has performed significantly higher than other promo types.
+
+\-\-\--
+
+### C) Compare the results between the two time periods.
+
+Doing the same analysis on the second data set below,
+
+```{r}
+(sales2PerPromo <- sales2 %>% select(promo_type_1, sales) %>% group_by(promo_type_1) %>% summarise("sales" = sum(sales)))
+```
+
+```{r}
+ggplot(data = sales2PerPromo, aes(x = promo_type_1, y = sales)) +
+  geom_bar(stat = "identity", position = "dodge")
+```
+
+In the second data set, again we can see The promo type PR14 performance is significantly higher than other types. Also, in the second data set, promo types like PR03, PR04, PR10 also performs better compared to the first data set.
